@@ -3,7 +3,7 @@
 Unified authentication package monorepo for the BSVibe ecosystem.
 
 Provides JWT verification and a common user model based on Supabase Auth,
-shared across all BSVibe services — BSGateway, BSNexus, BSupervisor, BSage, and more.
+shared across all BSVibe services
 
 ## Structure
 
