@@ -23,10 +23,12 @@ Navigate to **Settings > API** in your Supabase Dashboard. You'll need:
 
 | Credential | Location | Required For |
 |---|---|---|
-| **JWT Secret** | Settings > API > JWT Secret | `verify_token()` (always required) |
-| **Project URL** | Settings > API > Project URL | `get_user()` (Admin API) |
+| **Project URL** | Settings > API > Project URL | `verify_token()` (JWKS/ES256) + `get_user()` |
+| **JWT Secret** | Settings > API > JWT Secret | `verify_token()` (HS256 legacy only) |
 | **service_role key** | Settings > API > service_role | `get_user()` (Admin API) |
 
+> **Note:** Supabase now uses **ES256 (ECDSA)** for JWT signing. Pass `supabase_url` to automatically verify tokens via JWKS. The legacy `jwt_secret` (HS256) mode is still supported for backward compatibility.
+>
 > **Warning:** The `service_role` key bypasses Row Level Security. Never expose it to the client side.
 
 ### 3. Configure Auth Providers (Optional)
@@ -41,20 +43,23 @@ In **Authentication > Providers**, enable the sign-in methods you need:
 ### 4. Set Environment Variables
 
 ```env
-SUPABASE_JWT_SECRET=your-jwt-secret
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Only needed for legacy HS256 mode (when not using supabase_url for JWKS):
+# SUPABASE_JWT_SECRET=your-jwt-secret
 ```
 
 ## Quick Start
 
-### Token Verification
+### Token Verification (ES256 / JWKS — recommended)
 
 ```python
 from bsvibe_auth import SupabaseAuthProvider, AuthError
 
+# Automatically fetches public key from JWKS endpoint
 auth = SupabaseAuthProvider(
-    jwt_secret="your-supabase-jwt-secret",
+    supabase_url="https://xxx.supabase.co",
 )
 
 try:
@@ -62,6 +67,16 @@ try:
     print(f"Authenticated: {user.id} ({user.email})")
 except AuthError as e:
     print(f"Auth failed: {e.message}")
+```
+
+### Token Verification (HS256 — legacy)
+
+```python
+auth = SupabaseAuthProvider(
+    jwt_secret="your-supabase-jwt-secret",
+)
+
+user = await auth.verify_token(token)
 ```
 
 ### FastAPI Integration
@@ -74,7 +89,6 @@ from bsvibe_auth.fastapi import create_auth_dependency
 app = FastAPI()
 
 auth = SupabaseAuthProvider(
-    jwt_secret="your-supabase-jwt-secret",
     supabase_url="https://xxx.supabase.co",
     service_role_key="your-service-role-key",
 )
@@ -91,7 +105,6 @@ async def me(user: BSVibeUser = Depends(get_current_user)):
 
 ```python
 auth = SupabaseAuthProvider(
-    jwt_secret="...",
     supabase_url="https://xxx.supabase.co",
     service_role_key="your-service-role-key",
 )
@@ -124,7 +137,6 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    supabase_jwt_secret: str
     supabase_url: str
     supabase_service_role_key: str
 
@@ -145,7 +157,6 @@ from bsvibe_auth.fastapi import create_auth_dependency
 from app.config import settings
 
 auth_provider = SupabaseAuthProvider(
-    jwt_secret=settings.supabase_jwt_secret,
     supabase_url=settings.supabase_url,
     service_role_key=settings.supabase_service_role_key,
 )

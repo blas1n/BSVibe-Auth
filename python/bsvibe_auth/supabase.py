@@ -15,20 +15,28 @@ from bsvibe_auth.provider import AuthProvider
 class SupabaseAuthProvider(AuthProvider):
     """Supabase Auth JWT verification provider.
 
+    Supports two verification modes:
+
+    - **JWKS (recommended):** Pass ``supabase_url`` to automatically fetch
+      the public key from the project's JWKS endpoint and verify ES256 tokens.
+    - **HS256 (legacy):** Pass ``jwt_secret`` to verify tokens with a
+      symmetric secret. Used when ``supabase_url`` is not provided.
+
+    If both ``supabase_url`` and ``jwt_secret`` are provided, JWKS takes
+    priority for token verification.
+
     Args:
-        jwt_secret: JWT Secret for your Supabase project.
-                    Found in Supabase Dashboard > Settings > API > JWT Secret.
+        jwt_secret: JWT Secret for HS256 verification.
         supabase_url: Supabase project URL (e.g. https://xxx.supabase.co).
-                    Used for Admin API calls in get_user().
-        service_role_key: Supabase service_role key.
-                        Used for Admin API calls in get_user().
-                        Not required if only using verify_token().
-        algorithms: JWT signing algorithm. Supabase default is HS256.
+                    Enables JWKS-based ES256 verification and Admin API calls.
+        service_role_key: Supabase service_role key for Admin API calls.
+        algorithms: JWT signing algorithms. Defaults to ``["ES256"]`` when
+                    using JWKS, ``["HS256"]`` otherwise.
     """
 
     def __init__(
         self,
-        jwt_secret: str,
+        jwt_secret: str = "",
         supabase_url: str | None = None,
         service_role_key: str | None = None,
         algorithms: list[str] | None = None,
@@ -36,19 +44,37 @@ class SupabaseAuthProvider(AuthProvider):
         self._jwt_secret = jwt_secret
         self._supabase_url = supabase_url.rstrip("/") if supabase_url else None
         self._service_role_key = service_role_key
-        self._algorithms = algorithms or ["HS256"]
+        self._jwks_client: jwt.PyJWKClient | None = None
+
+        if self._supabase_url:
+            jwks_url = f"{self._supabase_url}/auth/v1/.well-known/jwks.json"
+            self._jwks_client = jwt.PyJWKClient(jwks_url)
+            self._algorithms = algorithms or ["ES256"]
+        else:
+            self._algorithms = algorithms or ["HS256"]
 
     async def verify_token(self, token: str) -> BSVibeUser:
         """Verify a Supabase JWT and return a BSVibeUser."""
         try:
-            payload = jwt.decode(
-                token,
-                self._jwt_secret,
-                algorithms=self._algorithms,
-                audience="authenticated",
-            )
+            if self._jwks_client:
+                signing_key = self._jwks_client.get_signing_key_from_jwt(token)
+                payload = jwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=self._algorithms,
+                    audience="authenticated",
+                )
+            else:
+                payload = jwt.decode(
+                    token,
+                    self._jwt_secret,
+                    algorithms=self._algorithms,
+                    audience="authenticated",
+                )
         except jwt.ExpiredSignatureError:
             raise TokenExpiredError()
+        except jwt.PyJWKClientError as e:
+            raise AuthError(f"JWKS error: {e}")
         except jwt.InvalidTokenError as e:
             raise TokenInvalidError(str(e))
 
