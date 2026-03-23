@@ -21,9 +21,16 @@ export function validateRedirectUri(redirectUri: string | null): {
   }
 
   const origin = parsed.origin;
-  const allowed = allowedOrigins;
 
-  if (!allowed.includes(origin)) {
+  const isAllowed = allowedOrigins.some((entry) => {
+    if (entry.endsWith(':*')) {
+      const prefix = entry.slice(0, -2);
+      return origin === prefix || origin.startsWith(prefix + ':');
+    }
+    return origin === entry;
+  });
+
+  if (!isAllowed) {
     return {
       valid: false,
       error: `Redirect origin "${origin}" is not allowed`,

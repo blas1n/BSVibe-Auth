@@ -1,4 +1,4 @@
-import { useState, useMemo, FormEvent } from 'react';
+import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { signInWithPassword } from '../lib/supabase';
 import { validateRedirectUri, buildCallbackUrl } from '../lib/redirect';
@@ -15,7 +15,7 @@ export function LoginPage() {
 
   const validation = useMemo(() => validateRedirectUri(redirectUri), [redirectUri]);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!validation.valid || !redirectUri) return;
 
