@@ -1,7 +1,7 @@
 """BSVibe Auth provider — simplified auth using auth.bsvibe.dev.
 
 Products only need ``BSVIBE_AUTH_URL`` (default: https://auth.bsvibe.dev).
-JWKS is fetched from ``{auth_url}/api/jwks``.
+JWKS is fetched from ``{auth_url}/.well-known/jwks.json``.
 
 If the JWKS proxy is not yet available, ``jwks_url`` can be set explicitly
 as a temporary override (e.g. Supabase's JWKS endpoint directly).
@@ -25,9 +25,9 @@ class BsvibeAuthProvider(AuthProvider):
 
     Args:
         auth_url: BSVibe Auth URL (e.g. ``https://auth.bsvibe.dev``).
-            JWKS is fetched from ``{auth_url}/api/jwks`` by default.
+            JWKS is fetched from ``{auth_url}/.well-known/jwks.json`` by default.
         jwks_url: Explicit JWKS URL override. When set, takes priority
-            over the auto-derived ``{auth_url}/api/jwks``. Useful when
+            over the auto-derived ``{auth_url}/.well-known/jwks.json``. Useful when
             the JWKS proxy is not deployed yet.
         algorithms: JWT algorithms. Defaults to ``["ES256"]``.
     """
@@ -40,7 +40,7 @@ class BsvibeAuthProvider(AuthProvider):
     ) -> None:
         self._auth_url = auth_url.rstrip("/")
         self._algorithms = algorithms or ["ES256"]
-        resolved_jwks_url = jwks_url or f"{self._auth_url}/api/jwks"
+        resolved_jwks_url = jwks_url or f"{self._auth_url}/.well-known/jwks.json"
         self._jwks_client = jwt.PyJWKClient(resolved_jwks_url, cache_keys=True)
 
     async def verify_token(self, token: str) -> BSVibeUser:
