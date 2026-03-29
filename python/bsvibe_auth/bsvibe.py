@@ -2,6 +2,8 @@
 
 Products only need ``BSVIBE_AUTH_URL`` (default: https://auth.bsvibe.dev).
 JWKS is fetched from ``{auth_url}/.well-known/jwks.json``.
+Token refresh and logout are handled via ``{auth_url}/api/refresh`` and
+``{auth_url}/api/logout``.
 
 If the JWKS proxy is not yet available, ``jwks_url`` can be set explicitly
 as a temporary override (e.g. Supabase's JWKS endpoint directly).
@@ -9,8 +11,10 @@ as a temporary override (e.g. Supabase's JWKS endpoint directly).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
+import httpx
 import jwt
 
 from bsvibe_auth.errors import AuthError, TokenExpiredError, TokenInvalidError
@@ -18,17 +22,28 @@ from bsvibe_auth.models import BSVibeUser
 from bsvibe_auth.provider import AuthProvider
 
 
+@dataclass
+class TokenPair:
+    """Access + refresh token pair returned by refresh()."""
+
+    access_token: str
+    refresh_token: str
+    expires_in: int
+
+
 class BsvibeAuthProvider(AuthProvider):
     """JWT verification provider for BSVibe ecosystem.
 
     Fetches public keys via JWKS and verifies ES256 JWTs.
+    Also provides token refresh and logout via auth.bsvibe.dev API.
 
     Args:
         auth_url: BSVibe Auth URL (e.g. ``https://auth.bsvibe.dev``).
-            JWKS is fetched from ``{auth_url}/.well-known/jwks.json`` by default.
+            JWKS is fetched from ``{auth_url}/.well-known/jwks.json``.
+            Refresh/logout use ``{auth_url}/api/refresh`` and
+            ``{auth_url}/api/logout``.
         jwks_url: Explicit JWKS URL override. When set, takes priority
-            over the auto-derived ``{auth_url}/.well-known/jwks.json``. Useful when
-            the JWKS proxy is not deployed yet.
+            over the auto-derived URL.
         algorithms: JWT algorithms. Defaults to ``["ES256"]``.
     """
 
@@ -61,6 +76,41 @@ class BsvibeAuthProvider(AuthProvider):
             raise TokenInvalidError(str(e))
 
         return self._payload_to_user(payload)
+
+    async def refresh_token(self, refresh_token: str) -> TokenPair:
+        """Exchange a refresh token for a new access + refresh token pair.
+
+        Calls ``{auth_url}/api/refresh``.
+        """
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{self._auth_url}/api/refresh",
+                json={"refresh_token": refresh_token},
+            )
+
+        if resp.status_code != 200:
+            raise AuthError("Invalid or expired refresh token")
+
+        data = resp.json()
+        return TokenPair(
+            access_token=data["access_token"],
+            refresh_token=data["refresh_token"],
+            expires_in=data["expires_in"],
+        )
+
+    async def logout(self, access_token: str) -> None:
+        """Invalidate the user's session (best-effort).
+
+        Calls ``{auth_url}/api/logout``.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                await client.post(
+                    f"{self._auth_url}/api/logout",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+        except Exception:
+            pass  # best-effort
 
     async def get_user(self, user_id: str) -> BSVibeUser | None:
         """Not supported — use SupabaseAuthProvider for admin operations."""

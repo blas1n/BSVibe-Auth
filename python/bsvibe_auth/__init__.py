@@ -1,6 +1,6 @@
 """bsvibe-auth: Unified authentication package for the BSVibe ecosystem."""
 
-from bsvibe_auth.bsvibe import BsvibeAuthProvider
+from bsvibe_auth.bsvibe import BsvibeAuthProvider, TokenPair
 from bsvibe_auth.errors import AuthError, TokenExpiredError, TokenInvalidError
 from bsvibe_auth.models import BSVibeUser
 from bsvibe_auth.provider import AuthProvider
@@ -11,6 +11,7 @@ __all__ = [
     "AuthProvider",
     "BSVibeUser",
     "BsvibeAuthProvider",
+    "TokenPair",
     "SupabaseAuthProvider",
     "TokenExpiredError",
     "TokenInvalidError",
