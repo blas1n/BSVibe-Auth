@@ -20,7 +20,13 @@ function getAllowedOrigins(): string[] {
     .filter(Boolean);
 }
 
-function validateOrigin(origin: string): boolean {
+function isAllowedRedirect(uri: string): boolean {
+  let origin: string;
+  try {
+    origin = new URL(uri).origin;
+  } catch {
+    return false;
+  }
   return getAllowedOrigins().some((entry) => {
     if (entry.endsWith(":*")) {
       const prefix = entry.slice(0, -2);
@@ -35,23 +41,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const parentOrigin = (req.query.origin as string) || "*";
-  if (parentOrigin !== "*" && !validateOrigin(parentOrigin)) {
-    return sendHtml(res, { error: "login_required" }, "*");
+  const redirectUri = req.query.redirect_uri as string;
+  if (!redirectUri || !isAllowedRedirect(redirectUri)) {
+    return res.status(400).json({ error: "Invalid or missing redirect_uri" });
   }
+
+  const errorRedirect = `${redirectUri}${redirectUri.includes("?") ? "&" : "?"}sso_error=login_required`;
 
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    return sendHtml(res, { error: "login_required" }, parentOrigin);
+    return res.redirect(302, errorRedirect);
   }
 
   const cookies = parseCookies(req.headers.cookie ?? "");
   const refreshToken = cookies[COOKIE_NAME];
 
   if (!refreshToken) {
-    return sendHtml(res, { error: "login_required" }, parentOrigin);
+    return res.redirect(302, errorRedirect);
   }
 
   const resp = await fetch(
@@ -67,47 +75,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   );
 
   if (!resp.ok) {
-    // Clear invalid cookie
     res.setHeader(
       "Set-Cookie",
-      `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=0`,
+      `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`,
     );
-    return sendHtml(res, { error: "login_required" }, parentOrigin);
+    return res.redirect(302, errorRedirect);
   }
 
   const data = await resp.json();
 
-  // Update cookie with new refresh token
+  // Rotate session cookie
   res.setHeader(
     "Set-Cookie",
-    `${COOKIE_NAME}=${data.refresh_token}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=${30 * 24 * 60 * 60}`,
+    `${COOKIE_NAME}=${data.refresh_token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${30 * 24 * 60 * 60}`,
   );
 
-  return sendHtml(res, {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_in: data.expires_in,
-  }, parentOrigin);
-}
-
-function sendHtml(
-  res: VercelResponse,
-  payload: { error: string } | { access_token: string; refresh_token: string; expires_in: number },
-  targetOrigin: string,
-): void {
-  const message = JSON.stringify({ type: "bsvibe-auth", ...payload });
-  const escapedOrigin = JSON.stringify(targetOrigin);
-  const html = `<!DOCTYPE html>
-<html>
-<head><title>BSVibe SSO</title></head>
-<body>
-<script>
-  window.parent.postMessage(${message}, ${escapedOrigin});
-</script>
-</body>
-</html>`;
-
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store");
-  res.status(200).send(html);
+  // Redirect back with tokens in hash fragment
+  const qs = new URLSearchParams();
+  qs.set("access_token", data.access_token);
+  qs.set("refresh_token", data.refresh_token);
+  qs.set("expires_in", String(data.expires_in));
+  return res.redirect(302, `${redirectUri}#${qs.toString()}`);
 }

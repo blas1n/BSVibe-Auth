@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.setHeader(
       "Set-Cookie",
-      `${COOKIE_NAME}=${refresh_token}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=${COOKIE_MAX_AGE}`,
+      `${COOKIE_NAME}=${refresh_token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${COOKIE_MAX_AGE}`,
     );
     return res.status(200).json({ ok: true });
   }
@@ -89,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Clear invalid cookie
       res.setHeader(
         "Set-Cookie",
-        `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=0`,
+        `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`,
       );
       return res.status(401).json({ error: "Session expired" });
     }
@@ -99,7 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Update cookie with new refresh token
     res.setHeader(
       "Set-Cookie",
-      `${COOKIE_NAME}=${data.refresh_token}; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=${COOKIE_MAX_AGE}`,
+      `${COOKIE_NAME}=${data.refresh_token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${COOKIE_MAX_AGE}`,
     );
 
     return res.status(200).json({
@@ -113,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "DELETE") {
     res.setHeader(
       "Set-Cookie",
-      `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=0`,
+      `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`,
     );
     return res.status(200).json({ ok: true });
   }
