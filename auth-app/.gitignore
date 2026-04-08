@@ -23,3 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Playwright
+playwright-report
+test-results
+
+# Local env
+.env
