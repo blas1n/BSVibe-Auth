@@ -43,7 +43,7 @@ export function CallbackPage() {
 
       if (!redirectUri) {
         // No redirect_uri: shared cookie is set, go to main site
-        window.location.href = 'https://bsvibe.dev/account';
+        navigateTo('https://bsvibe.dev/account');
         return;
       }
 
@@ -62,7 +62,18 @@ export function CallbackPage() {
         expires_in: Number(expiresIn),
         state: state || undefined,
       });
-      window.location.href = callbackUrl;
+      navigateTo(callbackUrl);
+    }
+
+    function navigateTo(url: string) {
+      // E2E test hook: capture target URL instead of navigating
+      // (cross-origin window.location.href can't be intercepted by Playwright)
+      const w = window as Window & { __E2E_REDIRECT_TARGET__?: string };
+      if (w.__E2E_REDIRECT_TARGET__ !== undefined) {
+        w.__E2E_REDIRECT_TARGET__ = url;
+        return;
+      }
+      window.location.href = url;
     }
 
     handleCallback();

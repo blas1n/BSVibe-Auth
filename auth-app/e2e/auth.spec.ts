@@ -80,38 +80,27 @@ test.describe('CallbackPage', () => {
       route.fulfill({ status: 200, body: '{"ok":true}' })
     );
 
-    // Intercept window.location.href assignment to capture redirect URL.
-    // Cross-origin window.location.href navigations bypass page.route,
-    // so we spy on the href setter to capture the target URL.
+    // Activate E2E hook in CallbackPage that captures the redirect target
+    // instead of performing window.location.href navigation
+    // (cross-origin navigation can't be intercepted by Playwright)
     await page.addInitScript(() => {
-      const loc = window.location;
-      const desc = Object.getOwnPropertyDescriptor(
-        Object.getPrototypeOf(loc),
-        'href',
-      );
-      if (desc) {
-        Object.defineProperty(loc, 'href', {
-          set(val: string) {
-            document.documentElement.dataset.redirectedTo = val;
-          },
-          get() { return desc.get?.call(loc) ?? ''; },
-          configurable: true,
-        });
-      }
+      (window as Window & { __E2E_REDIRECT_TARGET__?: string }).__E2E_REDIRECT_TARGET__ = '';
     });
 
     await page.goto(
       `/callback?redirect_uri=${encodeURIComponent(REDIRECT)}&state=s1#access_token=tok&refresh_token=ref&expires_in=3600`
     );
 
-    // Wait for redirect to be captured via the dataset spy
+    // Wait for the captured redirect target to be set
     await expect.poll(
-      () => page.evaluate(() => document.documentElement.dataset.redirectedTo),
+      () => page.evaluate(
+        () => (window as Window & { __E2E_REDIRECT_TARGET__?: string }).__E2E_REDIRECT_TARGET__,
+      ),
       { timeout: 5000 },
     ).toBeTruthy();
 
     const redirectedTo = await page.evaluate(
-      () => document.documentElement.dataset.redirectedTo ?? '',
+      () => (window as Window & { __E2E_REDIRECT_TARGET__?: string }).__E2E_REDIRECT_TARGET__ ?? '',
     );
     expect(redirectedTo).toContain('example.com/cb#');
     expect(redirectedTo).toContain('access_token=tok');
