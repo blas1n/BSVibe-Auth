@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const COOKIE_NAME = "bsvibe_session";
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
+const COOKIE_DOMAIN = ".bsvibe.dev"; // shared across *.bsvibe.dev
 
 function getAllowedOrigins(): string[] {
   return (process.env.ALLOWED_REDIRECT_ORIGINS || "")
@@ -59,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.setHeader(
       "Set-Cookie",
-      `${COOKIE_NAME}=${refresh_token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${COOKIE_MAX_AGE}`,
+      `${COOKIE_NAME}=${refresh_token}; HttpOnly; Secure; SameSite=Lax; Domain=${COOKIE_DOMAIN}; Path=/; Max-Age=${COOKIE_MAX_AGE}`,
     );
     return res.status(200).json({ ok: true });
   }
@@ -89,7 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Clear invalid cookie
       res.setHeader(
         "Set-Cookie",
-        `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`,
+        `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Domain=${COOKIE_DOMAIN}; Path=/; Max-Age=0`,
       );
       return res.status(401).json({ error: "Session expired" });
     }
@@ -99,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Update cookie with new refresh token
     res.setHeader(
       "Set-Cookie",
-      `${COOKIE_NAME}=${data.refresh_token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${COOKIE_MAX_AGE}`,
+      `${COOKIE_NAME}=${data.refresh_token}; HttpOnly; Secure; SameSite=Lax; Domain=${COOKIE_DOMAIN}; Path=/; Max-Age=${COOKIE_MAX_AGE}`,
     );
 
     return res.status(200).json({
@@ -113,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "DELETE") {
     res.setHeader(
       "Set-Cookie",
-      `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`,
+      `${COOKIE_NAME}=; HttpOnly; Secure; SameSite=Lax; Domain=${COOKIE_DOMAIN}; Path=/; Max-Age=0`,
     );
     return res.status(200).json({ ok: true });
   }

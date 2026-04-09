@@ -29,8 +29,21 @@ export function CallbackPage() {
         return;
       }
 
+      // Set shared domain cookie (Domain=.bsvibe.dev)
+      try {
+        await fetch('/api/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+          credentials: 'same-origin',
+        });
+      } catch {
+        // Best effort — cookie may fail in non-bsvibe.dev environments
+      }
+
       if (!redirectUri) {
-        setError('Missing redirect_uri parameter');
+        // No redirect_uri: shared cookie is set, go to main site
+        window.location.href = 'https://bsvibe.dev/account';
         return;
       }
 
@@ -40,18 +53,9 @@ export function CallbackPage() {
         return;
       }
 
-      // Set SSO session cookie (best effort)
-      try {
-        await fetch('/api/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-          credentials: 'same-origin',
-        });
-      } catch {
-        // Best effort
-      }
-
+      // Redirect to product — token in hash for backward compat
+      // Products migrated to server-side auth can ignore the hash
+      // and just read the shared bsvibe_session cookie
       const callbackUrl = buildCallbackUrl(redirectUri, {
         access_token: accessToken,
         refresh_token: refreshToken,
