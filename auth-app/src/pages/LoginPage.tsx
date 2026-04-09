@@ -7,19 +7,23 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const redirectUri = searchParams.get('redirect_uri');
   const state = searchParams.get('state');
+  const effectiveRedirectUri = redirectUri || 'https://bsvibe.dev/account';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const validation = useMemo(() => validateRedirectUri(redirectUri), [redirectUri]);
+  const validation = useMemo(
+    () => redirectUri ? validateRedirectUri(redirectUri) : { valid: true },
+    [redirectUri],
+  );
 
   const signupLink = `/signup${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
 
   async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!validation.valid || !redirectUri) return;
+    if (!validation.valid) return;
 
     setError('');
     setLoading(true);
@@ -39,13 +43,19 @@ export function LoginPage() {
         // Best effort — SSO cookie is not critical for login flow
       }
 
-      const callbackUrl = buildCallbackUrl(redirectUri, {
-        access_token: result.access_token,
-        refresh_token: result.refresh_token,
-        expires_in: result.expires_in,
-        state: state || undefined,
-      });
-      window.location.href = callbackUrl;
+      if (redirectUri) {
+        // Legacy: product has its own callback, send tokens in hash
+        const callbackUrl = buildCallbackUrl(redirectUri, {
+          access_token: result.access_token,
+          refresh_token: result.refresh_token,
+          expires_in: result.expires_in,
+          state: state || undefined,
+        });
+        window.location.href = callbackUrl;
+      } else {
+        // Shared cookie is set, just redirect
+        window.location.href = effectiveRedirectUri;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
@@ -98,8 +108,8 @@ export function LoginPage() {
               className="btn btn-google"
               disabled={loading}
               onClick={() => {
-                if (validation.valid && redirectUri) {
-                  signInWithOAuth('google', { redirectUri, state: state || undefined });
+                if (validation.valid) {
+                  signInWithOAuth('google', { redirectUri: effectiveRedirectUri, state: state || undefined });
                 }
               }}
             >

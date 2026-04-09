@@ -7,6 +7,7 @@ export function SignupPage() {
   const [searchParams] = useSearchParams();
   const redirectUri = searchParams.get('redirect_uri');
   const state = searchParams.get('state');
+  const effectiveRedirectUri = redirectUri || 'https://bsvibe.dev/account';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,13 +15,16 @@ export function SignupPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const validation = useMemo(() => validateRedirectUri(redirectUri), [redirectUri]);
+  const validation = useMemo(
+    () => redirectUri ? validateRedirectUri(redirectUri) : { valid: true },
+    [redirectUri],
+  );
 
   const loginLink = `/login${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!validation.valid || !redirectUri) return;
+    if (!validation.valid) return;
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -50,13 +54,17 @@ export function SignupPage() {
         // Best effort — SSO cookie is not critical for signup flow
       }
 
-      const callbackUrl = buildCallbackUrl(redirectUri, {
-        access_token: result.access_token,
-        refresh_token: result.refresh_token,
-        expires_in: result.expires_in,
-        state: state || undefined,
-      });
-      window.location.href = callbackUrl;
+      if (redirectUri) {
+        const callbackUrl = buildCallbackUrl(redirectUri, {
+          access_token: result.access_token,
+          refresh_token: result.refresh_token,
+          expires_in: result.expires_in,
+          state: state || undefined,
+        });
+        window.location.href = callbackUrl;
+      } else {
+        window.location.href = effectiveRedirectUri;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed');
     } finally {
@@ -123,8 +131,8 @@ export function SignupPage() {
               className="btn btn-google"
               disabled={loading}
               onClick={() => {
-                if (validation.valid && redirectUri) {
-                  signInWithOAuth('google', { redirectUri, state: state || undefined });
+                if (validation.valid) {
+                  signInWithOAuth('google', { redirectUri: effectiveRedirectUri, state: state || undefined });
                 }
               }}
             >
